@@ -1,0 +1,110 @@
+function scheduleEvents() {
+  
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var eventssheet = spreadsheet.getSheetByName("Worldwide Events");
+  eventssheet.activate();  
+  
+  var calendarID = eventssheet.getRange("A2").getValue();     //Cell with Calendar ID
+  var eventCal = CalendarApp.getCalendarById(calendarID);     //Google Calender "International Events"
+  var lastRun = eventssheet.getRange("B2").getValue();        //Cell with timestamp from last run
+  var signups = eventssheet.getRange("A4:P1510").getValues();   //Range of Calender Entries
+  var millisec_per_day = 1000 * 60 * 60 * 24;
+  
+  for (x=0; x<signups.length; x++) {
+    
+    var shift = signups[x];
+    
+    var EntryID = shift[0]; // Column Shift (number of columns)
+    var timestamp = shift[1];
+    var startTime = shift[2];
+    var endTime = shift[3];
+    var eventname = shift[4];
+    var website = shift[7];
+    var eventCity = shift[8];
+    var eventCountry = shift[9];
+    var contactPerson = shift[15];
+
+    
+    if (timestamp > lastRun && startTime instanceof Date) {
+      
+      // For 1-day Events
+      if ((endTime == "") || (endTime.getTime() == startTime.getTime())) {
+        if ( EntryID != "") { // Update existing Calendar Entry
+          eventCal.getEventById(EntryID).setAllDayDate(startTime);
+          eventCal.getEventById(EntryID).setDescription("ProVeg contact: " + contactPerson + '\n' + "City: "+ eventCity + '\n' + "Country: " + eventCountry + '\n' + "Website: " + website);
+        }
+        else { // Create new Calendar Entry
+          var newCalEntry = eventCal.createAllDayEvent(eventname, startTime, {description: "ProVeg contact: " + contactPerson + '\n' + "City: "+ eventCity + '\n' + "Country: " + eventCountry + '\n' + "Website: " + website}); 
+          eventssheet.getRange("A4:P1510").offset(x, 0,1,1).setValue(newCalEntry.getId()) ;
+        }
+      }
+      // For multiple day events
+      else{ 
+        // +1 day because of Google Script/Calendar behaviour
+        var endTime = new Date(endTime.getTime() + millisec_per_day);
+        
+        if ( EntryID != "") { // Update existing Calendar Entry
+          eventCal.getEventById(EntryID).setAllDayDates(startTime, endTime);
+          eventCal.getEventById(EntryID).setDescription("ProVeg contact: " + contactPerson + '\n' + "City: "+ eventCity + '\n' + "Country: " + eventCountry + '\n' + "Website: " + website);
+        }
+        else { // Create new Calendar Entry
+          var newCalEntry = eventCal.createAllDayEvent(eventname, startTime, endTime, {description: "ProVeg contact: " + contactPerson + '\n' + "City: "+ eventCity + '\n' + "Country: " + eventCountry + '\n' + "Website: " + website}); 
+          eventssheet.getRange("A4:P1510").offset(x, 0,1,1).setValue(newCalEntry.getId()) ;
+        }
+      }
+    }
+
+  }
+   // Enter timestamp of this run
+   var date = Utilities.formatDate(new Date(), "GMT+2", "dd-MM-yyyy hh:mm:ss");
+   eventssheet.getRange("B2").setValue(date);
+}
+
+
+//function onOpen() {
+//  var ui = SpreadsheetApp.getUi();
+//  ui.createMenu('Sync to Calendar')
+//  .addItem('Schedule events now', 'scheduleEvents')
+//  .addToUi();
+//}
+
+function onEdit(event)
+{ 
+  var timezone = "GMT+2";
+  var timestamp_format = "dd-MM-yyyy hh:mm:ss"; // Timestamp Format. 
+  var timeStampColName = "Change Date";
+  
+  var sheet = event.source.getSheetByName("Worldwide Events"); //Name of the sheet where you want to run this script.
+  var actRng = event.source.getActiveRange();
+  var editColumn = actRng.getColumn();
+  var index = actRng.getRowIndex();
+  var headers = sheet.getRange(3, 1, 1, sheet.getLastColumn()).getValues();
+  var dateCol = headers[0].indexOf(timeStampColName);
+  
+  // Columns that trigger a calendar update
+  var updateColName1 = "Date (Start)";
+  var updateColName2 = "Date (End)";
+  var updateColName3 = "Contact person ProVeg";
+  var updateColName4 = "City";
+  var updateColName5 = "Country";
+    
+  // Column number of triggering columns
+  var updateCol1 = headers[0].indexOf(updateColName1); updateCol1 = updateCol1+1;
+  var updateCol2 = headers[0].indexOf(updateColName2); updateCol2 = updateCol2+1;
+  var updateCol3 = headers[0].indexOf(updateColName3); updateCol3 = updateCol3+1;
+  var updateCol4 = headers[0].indexOf(updateColName4); updateCol4 = updateCol4+1;
+  var updateCol5 = headers[0].indexOf(updateColName5); updateCol5 = updateCol5+1;
+  
+  // only timestamp if 'Last Updated' header exists, but not in the header row itself and if the updated column is one of the trigger columns
+  if (dateCol > -1 && index > 1 && ((editColumn == updateCol1) || 
+                                    (editColumn == updateCol2) || 
+                                    (editColumn == updateCol3) || 
+                                    (editColumn == updateCol4) || 
+                                    (editColumn == updateCol5))) {    
+    // enter timestamp of last edit
+    var cell = sheet.getRange(index, dateCol + 1);
+    var date = Utilities.formatDate(new Date(), timezone, timestamp_format);
+    cell.setValue(date);
+  }
+  
+}
